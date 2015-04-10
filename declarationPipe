@@ -1,0 +1,12 @@
++global.h中应增加：
++typedef struct PipeCmd{
++  int isBack;//是否后台运行
++  char *input;//输入重定向
++  char *output;//输出重定向
++  int simpleCmdNum;//管道所包含的简单命令的数目；
++  SimpleCmd temp[101];//管道所包含的简单命令按照输入顺序存放在结构中
++}PipeCmd;
++/*管道命令解析函数,参考execute.c中的命令解析函数，功能是将输入的管道命令放到一个管道结构中PipeCmd;将管道连接的每个简单命令按照顺序放到temp里；比如ls|grep in.txt>in.out&命令，此时PipeCmd->isBack=1,PipeCmd->output="in.out",PipeCmd->input=NULL;PipeCmd->simpleCmdNum=0;temp中依次放着命令ls和命令grep in.txt的相关内容。
++*/
++PipeCmd* handlePipeCmdStr(int begin,int end);//对应inputBuff串处理的开始位置和结束位置，返回管道命令结构。
++//崔崔完成

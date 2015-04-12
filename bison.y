@@ -1,4 +1,6 @@
 %{
+    #define _GNU_SOURCE
+    #include <unistd.h>
     #include "global.h"
 
     int yylex ();
@@ -92,6 +94,17 @@ void yyerror()
 }
 
 /****************************************************************
+				 打印提示符信息
+****************************************************************/
+static void
+prompt(void)
+{
+    char *wd = get_current_dir_name();
+    printf("yourname@computer:%s$ ", wd);
+    free(wd);
+}
+
+/****************************************************************
                   main主函数
 ****************************************************************/
 int main(int argc, char** argv) {
@@ -101,8 +114,7 @@ int main(int argc, char** argv) {
     init(); //初始化环境
     commandDone = 0;
     
-    printf("yourname@computer:%s$ ", get_current_dir_name()); //打印提示符信息
-
+    prompt();
     while(1){
         i = 0;
         while((c = getchar()) != '\n'){ //读入一行命令
@@ -120,7 +132,7 @@ int main(int argc, char** argv) {
             addHistory(inputBuff);
         }
         
-        printf("yourname@computer:%s$ ", get_current_dir_name()); //打印提示符信息
+	prompt();
      }
 
     return (EXIT_SUCCESS);

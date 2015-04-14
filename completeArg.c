@@ -17,29 +17,34 @@ int checkWildCard(char * str1,char * name){
     int i,j;
     i=0;
     j=0;
-    while(str1[i]!='\0'&&name[j]!='\0'){
-        if(str1[i]!='*'){
-        	if(str1[i]!=name[j])
-        		return 0;
-        	else{
-        		i++;
-        		j++;
-        		continue;
-        	}
-        }else{
-        	if(str1[i]=='*'){
-        		i++;
-        		while(str1[i]=='*') i++;
-
-        		while(str1[i]!=name[j]){
-        			j++;
-        		}
-        		continue;
-        	}
+    while(str1[i]!='\0'){
+        switch(str1[i]){
+   	 	case '?':
+        	i++;
+        	j++;
+        	break;
+        case '*':
+            while(str1[i]=='*'||str1[i]=='?'){
+            	if(str1[i]=='?')
+            		j++;
+            	i++;
+            }
+            while(name[j]!=str1[i]&&name[j]!='\0'){
+            	j++;
+            }
+            if(name[j]=='\0'&&str1[i]!='\0')
+            	return 0;
+            break;
+        default:
+            if(str1[i]!=name[j])
+            	return 0;
+            else{
+            	i++;
+            	j++;
+            	break;
+            }
         }
     }
-    if(str1[i]!=name[j])
-    	return 0;
     return 1;
 }
 char * completeArg(char * arg){
@@ -70,5 +75,5 @@ char * completeArg(char * arg){
 }
 
 int main(){
-	printf("%s\n",completeArg("n*"));
+	printf("%s\n",completeArg("n*b*.*?*"));
 }

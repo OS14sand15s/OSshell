@@ -1,0 +1,118 @@
+/*typedef struct PipeCmd{
+  int isBack;//是否后台运行
+  char *input;//输入重定向
+  char *output;//输出重定向
+  int simpleCmdNum;//管道所包含的简单命令的数目；
+  SimpleCmd temp[101];//管道所包含的简单命令按照输入顺序存放在结构中
+  }PipeCmd;*/
+#define S_INPUT 0//标准输入
+#define S_OUTPUT 1//标准输出
+void exePipeCmd(PipeCmd *pipecmd){//管道命令函数，将已经准备好的PipeCmd传进来。
+  int pipeIn/*输入重定向文件*/,pipeOut/*输出重定向文件*/,pipenum,i,singlecmdnum=pipecmd->singleCmdNum/*管道中包含其他命令的数目*/;
+  pid_t pid[singlecmdnum]/*执行简单命令需要的子进程的pid集合*/,shell_pid/*父进程的pid*/,Gpid/*管道进程组的pid*/;
+  pipes[singlecmdnum][2];//建立的管道。共需要单个命令数目-1个，实际上建立了单个命令数目个,最后把多余的关掉了。
+  shell_pid=getpid();//获得当前进程组的pid，本意是想获得usr-sh的组pid
+  for(i=0;i<siglecmdnum;i++)//建立子进程。
+    {
+      if(pipe(pipes[i])<0){//创建第i个管道
+	printf("Can not creat a pipe");
+      }
+      if(pid[i]=fork()<0)//创建第i个子进程
+	{
+	  printf("Can not fork()in pipe");
+	}
+      else
+	{
+	  /*创建成功*/
+	  if(!pid[i])//child process
+	    {
+	      if(i==0)//第一个子进程
+		{
+		  Gpid=getpid();//获得子进程的pid
+		  setpgid(Gpid,Gpid);//新建一个进程，把管道的第一个进程作为组长。
+		  if(!pipecmd->isBack)//如果不是后台命令
+		    {
+		      tcsetpgrp(0,Gpid);
+		    }//把他设置为当前进程组
+		   signal(SIGINT,SIG_DFL);//信号que xing 处理
+		   signal(SIGQUIT,SIG_DFL);
+		   signal(SIGTSTP,SIG_DFL);
+		   signal(SIGTTIN,SIG_DFL);
+		   signal(SIGTTOU,SIG_DFL);
+		  if(pipecmd->input!=NULL)//存在输入重定向
+		    {
+		      if((pipeIn=open(pipecmd->imput, O_RDONLY, S_IRUSR|S_IWUSR)) == -1)
+			{
+			  printf("can not open file%s!\n",pipecmd->input);
+			}
+		      if(dup2(pipeIn,S_INPUT)==-1)
+			{
+			  printf("dup2 failed!");
+			}
+		    }
+		  close(pipefd[i][0]);//关闭第一个管道的管道读；
+		  if(dup2(pipes[i][1],S_OUTPUT)<0)
+		    {
+		      printf("dup2 failed!");
+		    }   
+                   execPPCmd(pipecmd->temp[i]);//执行第i个命令，但是在执行的时候不用在fork了，直接进入执行阶段。
+		}
+	      else if(i==singlecmdnum-1)//这是最后一个进程
+		{
+		  setpgid(pid[i],Gpid);//将他加入管道进程组
+		  if(pipecmd->output!=NULL)
+		    {
+		      if((pipeOut=open(siglecmdnum->output, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1)
+			{
+			  printf("open failed!\n");
+			}
+		      if(dup2(pipeOut,S_OUTPUT)==-1)
+			{
+			  printf("dup2 failed!\n");
+			}
+		    }
+		  close(pipes[i-1][1]);//关掉管道写
+		  if(dup2(pipes[i-1][0],S_INPUT)<0)
+		    {
+		      printf("dup2 failed!\n");
+		    }
+		  for(j=0;j<i-1;j++)
+		    {
+		      close(pipes[j][0]);
+		      close(pipes[j][1]);
+		    }
+		  close(pipes[i][0]);
+		  close(pipes[i][1]);//其实最后一个管道本来不需要建立
+		  execPPCmd(pipecmd->temp[i]);//执行管道的子命令
+		}
+	      else//中间进程
+		{
+		  setpgid(pid[i],Gpid);//加入管道进程组
+		  close(pipes[i-1][1]);//关掉前一个管道写；
+		  close(pipes[i][0]);//关掉当前管道读；
+		  if(dup2(pipes[i-1][0],S_INPUT)==-1)//输入重定向
+		    {
+		      printf("dup2 failed!\n");
+		    }
+		  if(dup2(pipes[i][1],S_OUTPUT)==-1)//输出重定向
+		    {
+		      printf("dup2 failed!\n");
+		    }
+		  for(j=0;j<i-1;i++)
+		    {
+		      close(pipes[j][0]);
+		      close(pipes[j][1]);
+		    }//关闭不用的管道。
+		  execpipe(pipecmd->temp[i]);//执行管道的子命令，无需创建进程的。
+		}
+	    }
+	  else//父进程
+	    {
+	      if(cmd->isback)
+		addJob(pid[0]);
+	      else
+                setpgid(pid[0],pid[0]);//设置成当前进程组
+	    }
+	}
+    }
+}

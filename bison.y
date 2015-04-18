@@ -5,135 +5,68 @@
 
     int yylex ();
     void yyerror ();
-      
-    int offset, len, commandDone;
+    void execCd();
+    void execExit();
+    void execHistory();
+    void prompt(void);
+    //int  commandDone;
 %}
-
-%token STRING
-
-%%
-line            :   /* empty */
-                    |command                        {   execute();  commandDone = 1;   }
-;
-
-command         :   fgCommand
-                    |fgCommand '&'
-;
-
-fgCommand       :   simpleCmd
-;
-
-simpleCmd       :   progInvocation inputRedirect outputRedirect
-;
-
-progInvocation  :   STRING args
-;
-
-inputRedirect   :   /* empty */
-                    |'<' STRING
-;
-
-outputRedirect  :   /* empty */
-                    |'>' STRING
-;
-
-args            :   /* empty */
-                    |args STRING
-;
+%token CDCMD EXIT HISTORY JOBS FGCMD BGCMD BACKCMD PIPECMD INRE OUTRE CMD EOL
 
 %%
 
-/****************************************************************
-                  词法分析函数
-****************************************************************/
-int yylex(){
-    //这个函数用来检查inputBuff是否满足lex的定义，实际上并不进行任何操作，初期可略过不看
-    int flag;
-    char c;
-    
-	//跳过空格等无用信息
-    while(offset < len && (inputBuff[offset] == ' ' || inputBuff[offset] == '\t')){ 
-        offset++;
-    }
-    
-    flag = 0;
-    while(offset < len){ //循环进行词法分析，返回终结符
-        c = inputBuff[offset];
-        
-        if(c == ' ' || c == '\t'){
-            offset++;
-            return STRING;
-        }
-        
-        if(c == '<' || c == '>' || c == '&'){
-            if(flag == 1){
-                flag = 0;
-                return STRING;
-            }
-            offset++;
-            return c;
-        }
-        
-        flag = 1;
-        offset++;
-    }
-    
-    if(flag == 1){
-        return STRING;
-    }else{
-        return 0;
-    }
-}
+cmd_list: /* empty */
+| cmd_list cmd
+;
+cmd: CDCMD  {execCd();}
+| EXIT  {execExit();}
+| HISTORY  {execHistory();}
+| JOBS {execJobs();}
+| FGCMD  {execFgCmd();}
+| BGCMD  {execBgCmd();}
+| PIPECMD  {execPipeCmd();}
+| CMD   {execSimpleCmd();}
+| INRE   {execSimpleCmd();}
+| OUTRE {execSimpleCmd();}
+| EOL
+;
+
+
+
+%%
+
+
 
 /****************************************************************
                   错误信息执行函数
 ****************************************************************/
 void yyerror()
 {
-    printf("你输入的命令不正确，请重新输入！\n");
+    fputs("你输入的命令不正确，请重新输入！\n", stderr);
 }
 
 /****************************************************************
 				 打印提示符信息
 ****************************************************************/
-static void
+void
 prompt(void)
 {
     char *wd = get_current_dir_name();
-    printf("yourname@computer:%s$ ", wd);
+    char * user=getlogin();
+    char computer[256];
+    gethostname(computer,255);
+
+    fprintf(stderr, "%s@%s:%s$ ",user,computer, wd); //打印提示符信息
     free(wd);
+    //free(user);
 }
 
 /****************************************************************
                   main主函数
 ****************************************************************/
 int main(int argc, char** argv) {
-    int i;
-    char c;
 
     init(); //初始化环境
-    commandDone = 0;
-    
-    prompt();
-    while(1){
-        i = 0;
-        while((c = getchar()) != '\n'){ //读入一行命令
-            inputBuff[i++] = c;
-        }
-        inputBuff[i] = '\0';
-
-        len = i;
-        offset = 0;
-        
-        yyparse(); //调用语法分析函数，该函数由yylex()提供当前输入的单词符号
-
-        if(commandDone == 1){ //命令已经执行完成后，添加历史记录信息
-            commandDone = 0;
-            addHistory(inputBuff);
-        }
-        
-	prompt();
-     }
-
+    yyparse();
     return (EXIT_SUCCESS);
 }

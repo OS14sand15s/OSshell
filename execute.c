@@ -843,7 +843,7 @@ void execCd(){
     int i=2;
     int k=0;
     if(inputBuff[2]=='\0'){
-        chdir("~");
+        chdir("/home");
         return ;
     }
     while(inputBuff[i]==' '||inputBuff[i]=='\t')
@@ -864,7 +864,7 @@ void execCd(){
     else if(chdir(temp) < 0){
         printf("cd; %s 错误的文件名或文件夹名！\n", temp);
     }
-    printf("%s\n",temp);
+    printf("%s|\n",temp);
 }
 
 void execFgCmd(){
@@ -940,13 +940,11 @@ void execSimpleCmd(){
             }
             /*修改控制方式=========================*/
             if(!cmd->isBack){ //若是不是后台运行命令，
-          tcsetpgrp(0,pid);//将子进程组设置为前台进程组
+         // tcsetpgrp(0,pid);//将子进程组设置为前台进程组
             }
-          //  signal(SIGINT,SIG_DFL);//信号que xing 处理
-       // signal(SIGQUIT,SIG_DFL);
-       // signal(SIGTSTP,SIG_DFL);
-     //   signal(SIGTTIN,SIG_DFL);
-      // signal(SIGTTOU,SIG_DFL);
+            signal(SIGINT,ctrl_C);//信号que xing 处理
+            signal(SIGSTOP,ctrl_Z);
+
             printf("lijizhixing\n");
             if(execv(cmdBuff, cmd->args) < 0){ //执行命令
                 printf("execv failed!\n");

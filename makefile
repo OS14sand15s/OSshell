@@ -3,7 +3,7 @@ user-sh:
 	flex flex.l
 	gcc -c bison.tab.c
 	gcc -c execute.c
-	gcc -c lex.yy.c
+	gcc -c lex.yy.c -lfl
 	gcc -o user-sh bison.tab.o execute.o lex.yy.o -lfl
 
 clean:

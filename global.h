@@ -10,7 +10,8 @@ extern "C" {
     #define STOPPED "stopped"
     #define RUNNING "running"
     #define DONE    "done"
-
+    #define MAX_ARGU_LENGTH 200
+    #define MAX_ARGU_NUM 100
     #include <stdio.h>
     #include <stdlib.h>
     
@@ -34,7 +35,7 @@ extern "C" {
         struct Job *next; //下一节点指针
     } Job;
     
-    char inputBuff[100];  //存放输入的命令
+    char  *inputBuff;  //存放输入的命令
     
     void init();
     void addHistory(char *history);

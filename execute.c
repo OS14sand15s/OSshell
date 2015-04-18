@@ -623,6 +623,184 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
 
     return cmd;
 }
+<<<<<<< HEAD
+=======
+
+PipeCmd* handlePipeCmdStr(int begin, int end)
+{
+    int i, j, k;
+    int fileFinished; //记录命令是否解析完毕
+    char c, buff[10][40], inputFile[30], outputFile[30], *temp = NULL;
+    PipeCmd *cmd = malloc(sizeof *cmd);
+
+	//默认为非后台命令，输入输出重定向为null，如果有管道命令 指令数默认值为1
+    cmd->isBack = 0;
+    cmd->input = cmd->output = NULL;
+	cmd->simpleCmdNum=1;
+	fileFinished=0;
+
+    //初始化相应变量
+    for(i = begin; i<10; i++)
+	{
+        buff[i][0] = '\0';
+    }
+    inputFile[0] = '\0';
+    outputFile[0] = '\0';
+	
+    i = begin;
+	//跳过空格等无用信息
+    while(i < end && (inputBuff[i] == ' ' || inputBuff[i] == '\t'))
+	{
+        i++;
+    }
+
+    k = 0;
+    j = 0;
+    fileFinished = 0;
+    temp = buff[k]; //以下通过temp指针的移动实现对buff[i]的顺次赋值过程
+    while(i < end)
+	{
+		/*根据命令字符的不同情况进行不同的处理*/
+        switch(inputBuff[i])
+		{
+            case ' ':
+           case '\t': //命令名及参数的结束标志
+                temp[j] = '\0';
+                j = 0;
+                if(!fileFinished)//没完成
+				{
+                   // k++;
+                    temp = buff[k];
+                }
+                break;
+
+            case '<': //输入重定向标志
+                if(j != 0)
+				{
+		    //此判断为防止命令直接挨着<符号导致判断为同一个参数，如果ls<sth
+                    temp[j] = '\0';
+                    j = 0;
+                    if(!fileFinished)
+					{
+                       // k++;
+                        temp = buff[k];
+                    }
+                }
+                temp = inputFile;
+              //  fileFinished = 1;
+                i++;
+                break;
+
+            case '>': //输出重定向标志
+                if(j != 0)
+				{
+                    temp[j] = '\0';
+                    j = 0;
+                    if(!fileFinished)
+					{
+                       // k++;
+                        temp = buff[k];
+                    }
+                }
+                temp = outputFile;
+                //fileFinished = 1;
+                i++;
+              break;
+			  
+            case '&': //后台运行标志
+                if(j != 0){
+                    temp[j] = '\0';
+                    j = 0;
+                    if(!fileFinished)
+					{
+                        k++;
+                        temp = buff[k];
+                    }
+                }
+                cmd->isBack = 1;
+                //fileFinished = 1;
+                i++;
+                break;
+	
+			case'|'://管道标志
+				if(j != 0){
+                    temp[j] = '\0';
+                    j = 0;
+                    if(!fileFinished)
+					{
+                        k++;
+                        temp = buff[k];
+                    }
+                }
+				cmd->simpleCmdNum++;
+				
+                //fileFinished = 1;
+				i++;
+                break;
+
+
+            default: //默认则读入到temp指定的空间
+                temp[j++] = inputBuff[i++];
+                continue;
+		}
+
+		//跳过空格等无用信息
+        while(i < end && (inputBuff[i] == ' ' || inputBuff[i] == '\t'))
+		{
+            i++;
+        }
+	}
+	fileFinished=1;
+
+	
+    if(inputBuff[end-1] != ' ' && inputBuff[end-1] != '\t' && inputBuff[end-1] != '&')
+	{
+        temp[j] = '\0';
+        if(!fileFinished)
+		{
+            k++;
+        }
+    }
+
+	//如果有输入重定向文件，则为命令的输入重定向变量赋值
+    if(strlen(inputFile) != 0)
+	{
+        j = strlen(inputFile);
+        cmd->input = (char*)malloc(sizeof(char) * (j + 1));
+        strcpy(cmd->input, inputFile);
+    }
+	
+
+    //如果有输出重定向文件，则为命令的输出重定向变量赋值
+    if(strlen(outputFile) != 0){
+        j = strlen(outputFile);
+        cmd->output = (char*)malloc(sizeof(char) * (j + 1));
+        strcpy(cmd->output, outputFile);
+    }
+	
+	
+	for(k=0;k<cmd->simpleCmdNum;k++)
+	{
+		cmd->temp[k]= handleSimpleCmdStr(0, strlen(buff[k]));
+		if(k>0&&k<cmd->simpleCmdNum)
+			cmd->temp[k]->input=cmd->temp[k-1]->output;
+	}
+
+
+    #ifdef DEBUG
+    printf("****\n");
+    printf("isBack: %d\n",cmd->isBack);
+    	for(i = 0; cmd->args[i] != NULL; i++)
+		{
+    		printf("args[%d]: %s\n",i,cmd->args[i]);
+		}
+    printf("input: %s\n",cmd->input);
+    printf("output: %s\n",cmd->output);
+    printf("****\n");
+    #endif
+    return cmd;
+}
+>>>>>>> 341e73fc4b450416604d1ef22cc2e1f4f1d5f54d
 /*******************************************************
                      命令执行接口
 ********************************************************/

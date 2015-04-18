@@ -16,6 +16,7 @@
 
 #include "global.h"
 #define DEBUG
+int goon = 0;
 int ingnore = 0;       //用于设置signal信号量
 char *envPath[10], cmdBuff[40];  //外部命令的存放路径及读取外部命令的缓冲空间
 History history;                 //历史命令
@@ -31,6 +32,9 @@ typedef struct PipeCmd{
 /*******************************************************
                   工具以及辅助方法
 ********************************************************/
+void setGoon(){
+    goon = 1;
+}
 /*判断命令是否存在*/
 int exists(char *cmdFile){
     int i = 0;
@@ -198,7 +202,7 @@ void ctrl_C(){
 
 	//需要删除在作业链表中的当前作业
 	
-		head = now->next;
+	head = now->next;
 	
 	free(now);
 }
@@ -226,6 +230,7 @@ void fg_exec(int pid){
     strcpy(now->state, RUNNING);
 
     signal(SIGTSTP, ctrl_Z); //设置signal信号，为下一次按下组合键Ctrl+Z做准备
+    signal(SIGINT,ctrl_C);
     i = strlen(now->cmd) - 1;
     while(i >= 0 && now->cmd[i] != '&')
 		i--;
@@ -490,15 +495,17 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
 
     int i, j, k;
     int fileFinished; //记录命令是否解析完毕
-    char c, buff[10][40], inputFile[30], outputFile[30], *temp = NULL;
+    char c, buff[50][200], inputFile[30], outputFile[30], *temp = NULL;
     SimpleCmd *cmd = (SimpleCmd*)malloc(sizeof(SimpleCmd));
-    
+    #ifdef DEBUG
+    printf("%s!\n",inputBuff);
+    #endif
     //默认为非后台命令，输入输出重定向为null
     cmd->isBack = 0;
     cmd->input = cmd->output = NULL;
     
     //初始化相应变量
-    for(i = begin; i<10; i++){
+    for(i = begin; i<50; i++){
         buff[i][0] = '\0';
     }
     inputFile[0] = '\0';
@@ -560,7 +567,7 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
                 if(j != 0){
                     temp[j] = '\0';
                     j = 0;
-                    printf("temp:%s\n",temp);
+                    //printf("temp:%s\n",temp);
                     if(!fileFinished){
                         k++;
                         temp = buff[k];
@@ -588,10 +595,10 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
             k++;
         }
     }
-
+printf("k%d\n",k);
     //依次为命令名及其各个参数赋值
     cmd->args = (char**)malloc(sizeof(char*) * (MAX_ARGU_NUM));
-    
+    j=0;
     for(i = 0; i<k; i++){
         
         if(hasWildcard(buff[i])){
@@ -602,14 +609,14 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
             completeArg("/",0);
             p=heads->link;
             while(p!=NULL){
-                cmd->args[i]=(char *)malloc(sizeof(char)*(1+strlen(p->str)));
-                strcpy(cmd->args[i++], p->str);
+                cmd->args[j]=(char *)malloc(sizeof(char)*(1+strlen(p->str)));
+                strcpy(cmd->args[j++], p->str);
                 p=p->link;
             }
-            i--;
+           
         }else{
-            cmd->args[i] = (char*)malloc(sizeof(char) * (j + 1));
-            strcpy(cmd->args[i], buff[i]);
+            cmd->args[j] = (char*)malloc(sizeof(char) * (strlen(buff[i]) + 1));
+            strcpy(cmd->args[j++], buff[i]);
         }
         //printf("%s\n",cmd->args[i]);
     }
@@ -631,7 +638,7 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
     #ifdef DEBUG
     printf("****\n");
     printf("isBack: %d\n",cmd->isBack);
-        for(i = 0; cmd->args[i] != NULL; i++){
+        for(i = 0; i<j; i++){
             printf("args[%d]: %s\n",i,cmd->args[i]);
     }
     printf("input: %s\n",cmd->input);
@@ -929,6 +936,16 @@ void execSimpleCmd(){
         }
 
         if(pid == 0){ //子进程
+            if(cmd->isBack){ //若是后台运行命令，等待父进程增加作业
+                //printf("& !!\n");
+                signal(SIGUSR1, setGoon); //收到信号，setGoon函数将goon置1，以跳出下面的循环
+                while(goon == 0) ; //等待父进程SIGUSR1信号，表示作业已加到链表中
+                goon = 0; //置0，为下一命令做准备
+                
+                printf("[%d]\t%s\t\t%s\n", getpid(), RUNNING, inputBuff);
+                kill(getppid(), SIGUSR1);
+            }
+
             if(cmd->input != NULL){ //存在输入重定向
                 if((pipeIn = open(cmd->input, O_RDONLY, S_IRUSR|S_IWUSR)) == -1){
                     printf("不能打开文件 %s！\n", cmd->input);
@@ -955,18 +972,28 @@ void execSimpleCmd(){
            // if(!cmd->isBack){ //若是不是后台运行命令，
           // tcsetpgrp(0,pid);//将子进程组设置为前台进程组
            // }
-            signal(SIGINT,ctrl_C);//信号que xing 处理
-            signal(SIGSTOP,ctrl_Z);
+            //signal(SIGINT,ctrl_C);//信号que xing 处理
+            //signal(SIGSTOP,ctrl_Z);
             
            // printf("lijizhixing\n");
             if(execv(cmdBuff, cmd->args) < 0){ //执行命令
                 printf("execv failed!\n");
                 return;
             }
+            //kill(getppid(), SIGUSR1);
         }
         else{ //父进程
             if(cmd ->isBack){ //后台命令            
-                addJob(pid); //增加新的作
+            
+                fgPid = 0; //pid置0，为下一命令做准备
+                addJob(pid); //增加新的作业
+                sleep(2);
+                kill(pid, SIGUSR1); //子进程发信号，表示作业已加入
+                
+                //等待子进程输出
+                signal(SIGUSR1, setGoon);
+                while(goon == 0) ;//printf("fu jin cheng xun huan ing \n");
+                goon =0;
             }else{ //非后台命令
                 fgPid = pid;
                 waitpid(pid, NULL, 0);

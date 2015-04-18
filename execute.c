@@ -13,9 +13,10 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 #include <sys/termios.h>
-
 #include "global.h"
 #define DEBUG
+#define S_INPUT 0//标准输入
+#define S_OUTPUT 1//标准输出
 int ingnore = 0;       //用于设置signal信号量
 char *envPath[10], cmdBuff[40];  //外部命令的存放路径及读取外部命令的缓冲空间
 History history;                 //历史命令

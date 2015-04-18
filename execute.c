@@ -21,7 +21,13 @@ char *envPath[10], cmdBuff[40];  //外部命令的存放路径及读取外部命
 History history;                 //历史命令
 Job *head = NULL;                //作业头指针
 pid_t fgPid;                     //当前前台作业的进程号
-
+typedef struct PipeCmd{
+  int isBack;//是否后台运行
+  char *input;//输入重定向
+  char *output;//输出重定向
+  int simpleCmdNum;//管道所包含的简单命令的数目；
+  SimpleCmd * temp[101];//管道所包含的简单命令按照输入顺序存放在结构中
+  }PipeCmd;
 /*******************************************************
                   工具以及辅助方法
 ********************************************************/
@@ -623,8 +629,7 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
 
     return cmd;
 }
-<<<<<<< HEAD
-=======
+
 
 PipeCmd* handlePipeCmdStr(int begin, int end)
 {
@@ -781,7 +786,7 @@ PipeCmd* handlePipeCmdStr(int begin, int end)
 	
 	for(k=0;k<cmd->simpleCmdNum;k++)
 	{
-		cmd->temp[k]= handleSimpleCmdStr(0, strlen(buff[k]));
+		cmd->temp[k]= handleSimpleCmd(0, strlen(buff[k]));
 		if(k>0&&k<cmd->simpleCmdNum)
 			cmd->temp[k]->input=cmd->temp[k-1]->output;
 	}
@@ -790,9 +795,9 @@ PipeCmd* handlePipeCmdStr(int begin, int end)
     #ifdef DEBUG
     printf("****\n");
     printf("isBack: %d\n",cmd->isBack);
-    	for(i = 0; cmd->args[i] != NULL; i++)
+    	for(i = 0; cmd->temp[i] != NULL; i++)
 		{
-    		printf("args[%d]: %s\n",i,cmd->args[i]);
+    		printf("cmds[%d]: %s\n",i,cmd->temp[i]->args[0]);
 		}
     printf("input: %s\n",cmd->input);
     printf("output: %s\n",cmd->output);
@@ -800,7 +805,6 @@ PipeCmd* handlePipeCmdStr(int begin, int end)
     #endif
     return cmd;
 }
->>>>>>> 341e73fc4b450416604d1ef22cc2e1f4f1d5f54d
 /*******************************************************
                      命令执行接口
 ********************************************************/
@@ -844,8 +848,9 @@ void execCd(){
     }
     while(inputBuff[i]==' '||inputBuff[i]=='\t')
         i++;
-    for(;k<MAX_ARGU_LENGTH&&inputBuff[i]!=' '&&inputBuff[i]!='\t'&&inputBuff[i]!='\0';k++)
+    for(;k<MAX_ARGU_LENGTH&&inputBuff[i]!=' '&&inputBuff[i]!='\t'&&inputBuff[i]!='\0';k++,i++)
         temp[k]=inputBuff[i];
+    temp[k]='\0';
     if(hasWildcard(temp)){
             p=(StrList*)malloc(sizeof(StrList));
             p->link=NULL;
@@ -859,6 +864,7 @@ void execCd(){
     else if(chdir(temp) < 0){
         printf("cd; %s 错误的文件名或文件夹名！\n", temp);
     }
+    printf("%s\n",temp);
 }
 
 void execFgCmd(){

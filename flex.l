@@ -27,7 +27,7 @@ myinput(char *s, int size)
 "fg"[ \t]+"%"[0-9]+ {inputBuff=yytext;  return FGCMD;}
 "bg"[ \t]+"%"[0-9]+ {inputBuff=yytext;  return BGCMD;}
 
-[^ \t\n]+([ \t]+[^ \t\n]+)*("|"[ \t]?[^ \t\n]+([ \t]+[^ \t\n]+)*)+([ \t]*"&")?			{inputBuff=yytext;  return PIPECMD;}
+[^ \t\n]+([ \t]+[^ \t\n]+)*([ \t]*"|"[ \t]*[^ \t\n]+([ \t]+[^ \t\n]+)*)+([ \t]*"&")?			{inputBuff=yytext;  return PIPECMD;}
 [^ \t\n]+([ \t]+[^ \t\n]+)*[ \t]*"<"[ \t]*[^ \t\n]+([ \t]*">"[ \t]*[^ \t\n]+)*([ \t]*"&")?			{inputBuff=yytext;  return INRE;}
 [^ \t\n]+([ \t]+[^ \t\n]+)*[ \t]*">"[ \t]*[^ \t\n]+([ \t]*"<"[ \t]*[^ \t\n]+)*([ \t]*"&")?            {inputBuff=yytext;  return OUTRE;}
 [^ \t\n]+([ \t]+[^ \t\n]+)*([ \t]*"&")?           {inputBuff=yytext; return CMD;}

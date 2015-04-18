@@ -952,19 +952,11 @@ void execSimpleCmd(){
             }
         }
         else{ //父进程
-            if(cmd ->isBack){ //后台命令             
-          // fgPid = 0; //pid置0，为下一命令做准备
-                addJob(pid); //增加新的作业
-        // kill(pid, SIGUSR1); //子进程发信号，表示作业已加入
-                
-                //等待子进程输出
-        // signal(SIGUSR1, setGoon);
-        // while(goon == 0) ;
-        // goon = 0;
+            if(cmd ->isBack){ //后台命令            
+                addJob(pid); //增加新的作
             }else{ //非后台命令
           setpgid(pid,pid);      
- // fgPid = pid;
-        //           waitpid(pid, NULL, 0);
+          tcsetpgrp(0,pid);//将子进程组设置为前台进程组
             }
         }
     }else{ //命令不存在

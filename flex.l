@@ -17,7 +17,7 @@
 %}
 
 %%
-"cd" 		{inputBuff=yytext;  return CDCMD;}
+"cd"([ \t]+[^ \t\n]+)* 		{inputBuff=yytext;  return CDCMD;}
 "exit"       		{inputBuff=yytext;  return EXIT;}
 "history"  		{inputBuff=yytext;  return HISTORY;}
 "jobs"      		{inputBuff=yytext;  return JOBS;}

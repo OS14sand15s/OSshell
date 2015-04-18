@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
@@ -6,6 +7,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <stddef.h>
+#include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -14,7 +16,7 @@
 
 #include "global.h"
 #define DEBUG
-int goon = 0, ingnore = 0;       //用于设置signal信号量
+int ingnore = 0;       //用于设置signal信号量
 char *envPath[10], cmdBuff[40];  //外部命令的存放路径及读取外部命令的缓冲空间
 History history;                 //历史命令
 Job *head = NULL;                //作业头指针
@@ -62,29 +64,7 @@ int str2Pid(char *str, int start, int end){
     return atoi(chs);
 }
 
-/*调整部分外部命令的格式*/
-void justArgs(char *str){
-    int i, j, len;
-    len = strlen(str);
 
-    for(i = 0, j = -1; i < len; i++){
-        if(str[i] == '/'){
-            j = i;
-        }
-    }
-
-    if(j != -1){ //找到符号'/'
-        for(i = 0, j++; j < len; i++, j++){
-            str[i] = str[j];
-        }
-        str[i] = '\0';
-    }
-}
-
-/*设置goon*/
-void setGoon(){
-    goon = 1;
-}
 
 /*释放环境变量空间*/
 void release(){
@@ -195,14 +175,14 @@ void ctrl_C(){
 	ingnore = 1;
 
 	now = head;
-	while (now != NULL && now -> pid != fgpid)
+	while (now != NULL && now -> pid != fgPid)
 		now = now -> next;
 
 	if (now == NULL){
 		now = addJob(fgPid);    //没有前台作业则根据fgPid 添加
 	}
 
-	strcpy(now -> state, KILLED);
+	strcpy(now -> state, DONE);
 	now -> cmd[strlen(now -> cmd)] = '&';
 	now -> cmd[strlen(now -> cmd) + 1] = '\0';
 	printf("[%d]\t%s\t\t%s\n",now -> pid, now -> state, now -> cmd);
@@ -211,11 +191,9 @@ void ctrl_C(){
 	fgPid = 0;
 
 	//需要删除在作业链表中的当前作业
-	if (now == head ){
+	
 		head = now->next;
-	}
-	else
-		last -> next =now ->next;
+	
 	free(now);
 }
 
@@ -359,58 +337,206 @@ void init(){
 /*******************************************************
                       命令解析
 ********************************************************/
-SimpleCmd* handleSimpleCmdStr(int begin, int end){
-    int i, j, k;
-    int fileFinished; //记录命令是否解析完毕
-    char c, buff[10][40], inputFile[30], outputFile[30], *temp = NULL;
-    SimpleCmd *cmd = malloc(sizeof *cmd);
 
-	//默认为非后台命令，输入输出重定向为null
+/*******************************************************
+                      命令执行
+********************************************************/
+/*执行外部命令*/
+
+
+
+static void
+free_simple_cmd(SimpleCmd *cmd)
+{
+    int i;
+    for(i = 0; cmd->args[i] != NULL; i++)
+        free(cmd->args[i]);
+    free(cmd->args);
+    free(cmd->input);
+    free(cmd->output);
+    free(cmd);
+}
+
+int checkWildCard(char * str1,char * name){
+    int i,j;
+    i=0;
+    j=0;
+    while(str1[i]!='\0'){
+        switch(str1[i]){
+        case '?':
+            i++;
+            j++;
+            break;
+        case '*':
+            while(str1[i]=='*'||str1[i]=='?'){
+                if(str1[i]=='?')
+                    j++;
+                i++;
+            }
+            while(name[j]!=str1[i]&&name[j]!='\0'){
+                j++;
+            }
+            if(name[j]=='\0'&&str1[i]!='\0')
+                return 0;
+            break;
+        default:
+            if(str1[i]!=name[j])
+                return 0;
+            else{
+                i++;
+                j++;
+                break;
+            }
+        }
+    }
+    if(name[j]!='\0')
+        return 0;
+    return 1;
+}
+
+
+
+typedef struct string{
+    char *str;
+    struct string * link;
+}StrList;
+StrList * heads,*p;
+char * strs[50];
+int depth;
+
+void completeArg(char * dire,int dep){
+    DIR * dir;
+    struct dirent *dirp;
+    char * temp;
+    //char temp[MAX_ARGU_LENGTH];
+    int i;
+
+    dir=opendir(dire);
+    if(dir==NULL)
+        return;
+    while((dirp=readdir(dir))!=NULL){
+        if(checkWildCard(strs[dep]+1,dirp->d_name)){
+            //printf("%s %s \n",strs[dep]+1,dirp->d_name);
+            if(dep!=depth){
+                temp=(char *)malloc(sizeof(char)*(3+strlen(dire)+strlen(dirp->d_name)));
+                temp[0]='\0';
+                strcat(temp,dire);
+                strcat(temp,dirp->d_name);
+                strcat(temp,"/");
+                completeArg(temp,dep+1);
+            }else{
+                //dire+d_name :valid!
+                temp=(char *)malloc(sizeof(char)*(3+strlen(dire)+strlen(dirp->d_name)));
+                temp[0]='\0';
+                strcat(temp,dire);
+                strcat(temp,dirp->d_name);
+                p->link=(StrList*)malloc(sizeof(StrList));
+                p=p->link;
+                p->str=temp;
+                p->link=NULL;
+            }
+        }
+    }
+    closedir(dir);
+}
+    
+void split(char * arg){
+
+    char * current;
+    char  * temp;
+    int i=0,k=0,j=0;
+    if(arg[0]!='/'){
+        current=get_current_dir_name();
+        strcat(current,"/");
+        strcat(current,arg);
+    }else{
+        current=arg;
+    }
+    while(current[i]!='\0'){
+        
+        
+        temp=(char *)malloc(sizeof(char)*1000);
+        j=1;
+        temp[0]='/';
+        i++;
+        for(;current[i]!='/'&&current[i]!='\0';i++,j++)
+            temp[j]=current[i];
+        temp[j]='\0';
+        strs[k++]=temp;
+        //printf("%s %d\n",strs[k-1],k);
+
+    }
+    depth=k-1;
+
+}
+
+
+int hasWildcard(char * s){
+    int i=0;
+    for(;i<strlen(s);i++){
+        if(s[i]=='*'||s[i]=='?')
+            return 1;
+    }
+    return 0;
+}
+SimpleCmd * handleSimpleCmd(int begin,int end){
+    int i, j, k;
+    
+    char c, buff[MAX_ARGU_NUM][MAX_ARGU_LENGTH], inputFile[MAX_ARGU_LENGTH], outputFile[MAX_ARGU_LENGTH], *temp = NULL;
+    SimpleCmd *cmd = malloc(sizeof *cmd);
+    
+    printf("%s\n",inputBuff);
+    //默认为非后台命令，输入输出重定向为null
     cmd->isBack = 0;
     cmd->input = cmd->output = NULL;
 
     //初始化相应变量
-    for(i = begin; i<10; i++){
+    for(i = begin; i<MAX_ARGU_NUM; i++){
         buff[i][0] = '\0';
     }
     inputFile[0] = '\0';
     outputFile[0] = '\0';
 
-    i = begin;
-	//跳过空格等无用信息
-    while(i < end && (inputBuff[i] == ' ' || inputBuff[i] == '\t')){
-        i++;
-    }
+    i=begin;
 
     k = 0;
     j = 0;
-    fileFinished = 0;
+   
     temp = buff[k]; //以下通过temp指针的移动实现对buff[i]的顺次赋值过程
     while(i < end){
-		/*根据命令字符的不同情况进行不同的处理*/
+        /*根据命令字符的不同情况进行不同的处理*/
         switch(inputBuff[i]){
             case ' ':
             case '\t': //命令名及参数的结束标志
                 temp[j] = '\0';
                 j = 0;
-                if(!fileFinished){
+              
                     k++;
                     temp = buff[k];
-                }
+                
                 break;
 
             case '<': //输入重定向标志
                 if(j != 0){
-		    //此判断为防止命令直接挨着<符号导致判断为同一个参数，如果ls<sth
+            //此判断为防止命令直接挨着<符号导致判断为同一个参数，如果ls<sth
                     temp[j] = '\0';
                     j = 0;
-                    if(!fileFinished){
+                   
                         k++;
                         temp = buff[k];
-                    }
+                    
+                }
+                if(hasWildcard(temp)){
+                     p=(StrList*)malloc(sizeof(StrList));
+                    p->link=NULL;
+                   heads=p;
+                    split(temp);
+                    completeArg("/",0);
+                    p=heads->link;
+                     temp=p->str;
                 }
                 temp = inputFile;
-                fileFinished = 1;
+                
                 i++;
                 break;
 
@@ -418,91 +544,187 @@ SimpleCmd* handleSimpleCmdStr(int begin, int end){
                 if(j != 0){
                     temp[j] = '\0';
                     j = 0;
-                    if(!fileFinished){
+                    
                         k++;
                         temp = buff[k];
-                    }
+                    
+                }
+                if(hasWildcard(temp)){
+                     p=(StrList*)malloc(sizeof(StrList));
+                    p->link=NULL;
+                   heads=p;
+                    split(temp);
+                    completeArg("/",0);
+                    p=heads->link;
+                     temp=p->str;
                 }
                 temp = outputFile;
-                fileFinished = 1;
+                
                 i++;
                 break;
-
-            case '&': //后台运行标志
-                if(j != 0){
-                    temp[j] = '\0';
-                    j = 0;
-                    if(!fileFinished){
-                        k++;
-                        temp = buff[k];
-                    }
-                }
-                cmd->isBack = 1;
-                fileFinished = 1;
-                i++;
-                break;
-
+            case '&':
+            cmd->isBack=1;
+            i++;
+            break;
             default: //默认则读入到temp指定的空间
                 temp[j++] = inputBuff[i++];
                 continue;
-		}
+        }
 
-		//跳过空格等无用信息
+        //跳过空格等无用信息
         while(i < end && (inputBuff[i] == ' ' || inputBuff[i] == '\t')){
             i++;
         }
-	}
+    }
 
-    if(inputBuff[end-1] != ' ' && inputBuff[end-1] != '\t' && inputBuff[end-1] != '&'){
+    if(inputBuff[end-1] != ' ' && inputBuff[end-1] != '\t'){
         temp[j] = '\0';
-        if(!fileFinished){
+    
             k++;
-        }
+        
     }
 
-	//依次为命令名及其各个参数赋值
-    cmd->args = (char**)malloc(sizeof(char*) * (k + 1));
-    cmd->args[k] = NULL;
+    //依次为命令名及其各个参数赋值
+    cmd->args = (char**)malloc(sizeof(char*) * (MAX_ARGU_NUM));
+    
     for(i = 0; i<k; i++){
-        j = strlen(buff[i]);
-        cmd->args[i] = (char*)malloc(sizeof(char) * (j + 1));
-        strcpy(cmd->args[i], buff[i]);
+        
+        if(hasWildcard(buff[i])){
+            p=(StrList*)malloc(sizeof(StrList));
+            p->link=NULL;
+            heads=p;
+            split(buff[i]);
+            completeArg("/",0);
+            p=heads->link;
+            while(p!=NULL){
+                cmd->args[i]=(char *)malloc(sizeof(char)*(1+strlen(p->str)));
+                strcpy(cmd->args[i++], p->str);
+                p=p->link;
+            }
+            i--;
+        }else{
+            cmd->args[i] = (char*)malloc(sizeof(char) * (j + 1));
+            strcpy(cmd->args[i], buff[i]);
+        }
+        //printf("%s\n",cmd->args[i]);
     }
 
-	//如果有输入重定向文件，则为命令的输入重定向变量赋值
-    if(strlen(inputFile) != 0){
-        j = strlen(inputFile);
-        cmd->input = (char*)malloc(sizeof(char) * (j + 1));
-        strcpy(cmd->input, inputFile);
-    }
 
-    //如果有输出重定向文件，则为命令的输出重定向变量赋值
-    if(strlen(outputFile) != 0){
-        j = strlen(outputFile);
-        cmd->output = (char*)malloc(sizeof(char) * (j + 1));
-        strcpy(cmd->output, outputFile);
-    }
     #ifdef DEBUG
     printf("****\n");
     printf("isBack: %d\n",cmd->isBack);
-    	for(i = 0; cmd->args[i] != NULL; i++){
-    		printf("args[%d]: %s\n",i,cmd->args[i]);
-	}
+        for(i = 0; cmd->args[i] != NULL; i++){
+            printf("args[%d]: %s\n",i,cmd->args[i]);
+    }
     printf("input: %s\n",cmd->input);
     printf("output: %s\n",cmd->output);
     printf("****\n");
     #endif
+
     return cmd;
 }
-
 /*******************************************************
-                      命令执行
+                     命令执行接口
 ********************************************************/
-/*执行外部命令*/
-void execExternalCmd(SimpleCmd *cmd){
+void execExit(){
+    exit(0);
+}
+
+void execHistory(){
+    int i;
+    if(history.end == -1){
+        printf("尚未执行任何命令\n");
+            return;
+    }
+    i = history.start;
+    do {
+        printf("%s\n", history.cmds[i]);
+            i = (i + 1)%HISTORY_LEN;
+    } while(i != (history.end + 1)%HISTORY_LEN);
+}
+
+void execJobs(){
+    int i;
+    Job *now = NULL;
+    if(head == NULL){
+        printf("尚无任何作业\n");
+     } else {
+        printf("index\tpid\tstate\t\tcommand\n");
+        for(i = 1, now = head; now != NULL; now = now->next, i++){
+            printf("%d\t%d\t%s\t\t%s\n", i, now->pid, now->state, now->cmd);
+        }
+    }
+}
+
+void execCd(){
+    char temp[MAX_ARGU_LENGTH];
+    int i=2;
+    int k=0;
+    if(inputBuff[2]=='\0'){
+        chdir("~");
+        return ;
+    }
+    while(inputBuff[i]==' '||inputBuff[i]=='\t')
+        i++;
+    for(;k<MAX_ARGU_LENGTH&&inputBuff[i]!=' '&&inputBuff[i]!='\t'&&inputBuff[i]!='\0';k++)
+        temp[k]=inputBuff[i];
+    if(hasWildcard(temp)){
+            p=(StrList*)malloc(sizeof(StrList));
+            p->link=NULL;
+            heads=p;
+            split(temp);
+            completeArg("/",0);
+            p=heads->link;
+            if(chdir(p->str)<0)
+                printf("cd; %s 错误的文件名或文件夹名！\n", p->str);
+    }
+    else if(chdir(temp) < 0){
+        printf("cd; %s 错误的文件名或文件夹名！\n", temp);
+    }
+}
+
+void execFgCmd(){
+    int i=0;
+    int pid;
+    int start,end;
+    for(;i<strlen(inputBuff);i++){
+        if(inputBuff[i]=='%'){
+            start=i+1;
+            break;
+        }
+
+    }
+    end=strlen(inputBuff);
+    pid=str2Pid(inputBuff,start,end);
+    if(pid != -1){
+       fg_exec(pid);
+    }
+}
+
+void execBgCmd(){
+        int i=0;
+    int pid;
+    int start,end;
+    for(;i<strlen(inputBuff);i++){
+        if(inputBuff[i]=='%'){
+            start=i+1;
+            break;
+        }
+
+    }
+    end=strlen(inputBuff);
+    pid=str2Pid(inputBuff,start,end);
+    if(pid != -1){
+      bg_exec(pid);
+    }
+}
+
+void execSimpleCmd(){
+    SimpleCmd *cmd = handleSimpleCmd(0, strlen(inputBuff));
+    int i;
     pid_t pid;
     int pipeIn, pipeOut;
-
+    
     if(exists(cmd->args[0])){ //命令存在
 
         if((pid = fork()) < 0){
@@ -532,120 +754,43 @@ void execExternalCmd(SimpleCmd *cmd){
                     return;
                 }
             }
-
-            if(cmd->isBack){ //若是后台运行命令，等待父进程增加作业
-                signal(SIGUSR1, setGoon); //收到信号，setGoon函数将goon置1，以跳出下面的循环
-                while(goon == 0) ; //等待父进程SIGUSR1信号，表示作业已加到链表中
-                goon = 0; //置0，为下一命令做准备
-
-                printf("[%d]\t%s\t\t%s\n", getpid(), RUNNING, inputBuff);
-                kill(getppid(), SIGUSR1);
+            /*修改控制方式=========================*/
+            if(!cmd->isBack){ //若是不是后台运行命令，
+          tcsetpgrp(0,pid);//将子进程组设置为前台进程组
             }
-
-            justArgs(cmd->args[0]);
+          //  signal(SIGINT,SIG_DFL);//信号que xing 处理
+       // signal(SIGQUIT,SIG_DFL);
+       // signal(SIGTSTP,SIG_DFL);
+     //   signal(SIGTTIN,SIG_DFL);
+      // signal(SIGTTOU,SIG_DFL);
+            printf("lijizhixing\n");
             if(execv(cmdBuff, cmd->args) < 0){ //执行命令
                 printf("execv failed!\n");
                 return;
             }
         }
-		else{ //父进程
-            if(cmd ->isBack){ //后台命令
-                fgPid = 0; //pid置0，为下一命令做准备
+        else{ //父进程
+            if(cmd ->isBack){ //后台命令             
+          // fgPid = 0; //pid置0，为下一命令做准备
                 addJob(pid); //增加新的作业
-                kill(pid, SIGUSR1); //子进程发信号，表示作业已加入
-
+        // kill(pid, SIGUSR1); //子进程发信号，表示作业已加入
+                
                 //等待子进程输出
-                signal(SIGUSR1, setGoon);
-                while(goon == 0) ;
-                goon = 0;
+        // signal(SIGUSR1, setGoon);
+        // while(goon == 0) ;
+        // goon = 0;
             }else{ //非后台命令
-                fgPid = pid;
-                waitpid(pid, NULL, 0);
+          setpgid(pid,pid);      
+ // fgPid = pid;
+        //           waitpid(pid, NULL, 0);
             }
-		}
+        }
     }else{ //命令不存在
         printf("找不到命令%s\n", inputBuff);
     }
+
 }
 
-/*执行命令*/
-void execSimpleCmd(SimpleCmd *cmd){
-    int i, pid;
-    char *temp;
-    Job *now = NULL;
+void execPipeCmd(){
 
-    if(strcmp(cmd->args[0], "exit") == 0) { //exit命令
-        exit(0);
-    } else if (strcmp(cmd->args[0], "history") == 0) { //history命令
-        if(history.end == -1){
-            printf("尚未执行任何命令\n");
-            return;
-        }
-        i = history.start;
-        do {
-            printf("%s\n", history.cmds[i]);
-            i = (i + 1)%HISTORY_LEN;
-        } while(i != (history.end + 1)%HISTORY_LEN);
-    } else if (strcmp(cmd->args[0], "jobs") == 0) { //jobs命令
-        if(head == NULL){
-            printf("尚无任何作业\n");
-        } else {
-            printf("index\tpid\tstate\t\tcommand\n");
-            for(i = 1, now = head; now != NULL; now = now->next, i++){
-                printf("%d\t%d\t%s\t\t%s\n", i, now->pid, now->state, now->cmd);
-            }
-        }
-    } else if (strcmp(cmd->args[0], "cd") == 0) { //cd命令
-        temp = cmd->args[1];
-        if(temp != NULL){
-            if(chdir(temp) < 0){
-                printf("cd; %s 错误的文件名或文件夹名！\n", temp);
-            }
-        }
-    } else if (strcmp(cmd->args[0], "fg") == 0) { //fg命令
-        temp = cmd->args[1];
-        if(temp != NULL && temp[0] == '%'){
-            pid = str2Pid(temp, 1, strlen(temp));
-            if(pid != -1){
-                fg_exec(pid);
-            }
-        }else{
-            printf("fg; 参数不合法，正确格式为：fg %<int>\n");
-        }
-    } else if (strcmp(cmd->args[0], "bg") == 0) { //bg命令
-        temp = cmd->args[1];
-        if(temp != NULL && temp[0] == '%'){
-            pid = str2Pid(temp, 1, strlen(temp));
-
-            if(pid != -1){
-                bg_exec(pid);
-            }
-        }
-		else{
-            printf("bg; 参数不合法，正确格式为：bg %<int>\n");
-        }
-    } else{ //外部命令
-        execExternalCmd(cmd);
-    }
-}
-
-static void
-free_simple_cmd(SimpleCmd *cmd)
-{
-    int i;
-    for(i = 0; cmd->args[i] != NULL; i++)
-        free(cmd->args[i]);
-    free(cmd->args);
-    free(cmd->input);
-    free(cmd->output);
-    free(cmd);
-}
-
-/*******************************************************
-                     命令执行接口
-********************************************************/
-void execute(){
-    SimpleCmd *cmd = handleSimpleCmdStr(0, strlen(inputBuff));
-    execSimpleCmd(cmd);
-    free_simple_cmd(cmd);
 }

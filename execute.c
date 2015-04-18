@@ -972,7 +972,209 @@ void execSimpleCmd(){
     }
 
 }
+void execOuterPipeCmd(SimpleCmd *cmd){
+    pid_t pid;
+    int pipeIn, pipeOut;
+    if(exists(cmd->args[0])){ //命令存在
+      if(execv(cmdBuff, cmd->args) < 0){ //执行命令
+                printf("execv failed!\n");
+                return;
+            }
+        }
+    else
+      { //命令不存在
+        printf("找不到命令 %15s\n", inputBuff);
+      }
+}
 
+/*执行命令*/
+void execPPCmd(SimpleCmd *cmd){
+    int i, pid;
+    char *temp;
+    Job *now = NULL;
+    
+    if(strcmp(cmd->args[0], "exit") == 0) { //exit命令
+        exit(0);
+    } else if (strcmp(cmd->args[0], "history") == 0) { //history命令
+        if(history.end == -1){
+            printf("尚未执行任何命令\n");
+            return;
+        }
+        i = history.start;
+        do {
+            printf("%s\n", history.cmds[i]);
+            i = (i + 1)%HISTORY_LEN;
+        } while(i != (history.end + 1)%HISTORY_LEN);
+    } else if (strcmp(cmd->args[0], "jobs") == 0) { //jobs命令
+        if(head == NULL){
+            printf("尚无任何作业\n");
+        } else {
+            printf("index\tpid\tstate\t\tcommand\n");
+            for(i = 1, now = head; now != NULL; now = now->next, i++){
+                printf("%d\t%d\t%s\t\t%s\n", i, now->pid, now->state, now->cmd);
+            }
+        }
+    } else if (strcmp(cmd->args[0], "cd") == 0) { //cd命令
+        temp = cmd->args[1];
+        if(temp != NULL){
+            if(chdir(temp) < 0){
+                printf("cd; %s 错误的文件名或文件夹名！\n", temp);
+            }
+        }
+    } else if (strcmp(cmd->args[0], "fg") == 0) { //fg命令
+        temp = cmd->args[1];
+        if(temp != NULL && temp[0] == '%'){
+            pid = str2Pid(temp, 1, strlen(temp));
+            if(pid != -1){
+                fg_exec(pid);
+            }
+        }else{
+            printf("fg; 参数不合法，正确格式为：fg %<int>\n");
+        }
+    } else if (strcmp(cmd->args[0], "bg") == 0) { //bg命令
+        temp = cmd->args[1];
+        if(temp != NULL && temp[0] == '%'){
+            pid = str2Pid(temp, 1, strlen(temp));
+            
+            if(pid != -1){
+                bg_exec(pid);
+            }
+        }
+		else{
+            printf("bg; 参数不合法，正确格式为：bg %<int>\n");
+        }
+    } else{ //外部命令
+        execOuterPipeCmd(cmd);
+    }
+    
+    //释放结构体空间
+    for(i = 0; cmd->args[i] != NULL; i++){
+        free(cmd->args[i]);
+        free(cmd->input);
+        free(cmd->output);
+    }
+}
+/*PipeCmd* handlePipeCmdStr(int begin,int end)崔崔的工作*/
+/*******************************************************
+                     命令执行接口
+********************************************************/
+
+/*
+***********************************************8]
+*/
+void exePipeCmd(PipeCmd *pipecmd){
+  int pipeIn,pipeOut,pipenum,i,singlecmdnum=pipecmd->singleCmdNum;
+  pid_t pid[singlecmdnum],shell_pid,Gpid;
+  pipes[singlecmdnum][2];//管道们
+  shell_pid=getpid();
+  for(i=0;i<siglecmdnum;i++)
+    {
+      if(pipe(pipes[i])<0){
+	printf("Can not creat a pipe");
+      }
+      if(pid[i]=fork()<0)
+	{
+	  printf("Can not fork()in pipe");
+	}
+      else
+	{
+	  /*创建成功*/
+	  if(!pid[i])//child process
+	    {
+	      if(i==0)//第一个子进程
+		{
+		  Gpid=getpid();
+		  setpgid(Gpid,Gpid);//新建一个进程，把管道的第一个进程作为组长。
+		  if(!pipecmd->isBack)
+		    {
+		      tcsetpgrp(0,Gpid);
+		    }//把他设置为当前进程组
+		   signal(SIGINT,SIG_DFL);//信号que xing 处理
+		   signal(SIGQUIT,SIG_DFL);
+		   signal(SIGTSTP,SIG_DFL);
+		   signal(SIGTTIN,SIG_DFL);
+		   signal(SIGTTOU,SIG_DFL);
+		  if(pipecmd->input!=NULL)//存在输入重定向
+		    {
+		      if((pipeIn=open(pipecmd->imput, O_RDONLY, S_IRUSR|S_IWUSR)) == -1)
+			{
+			  printf("can not open file%s!\n",pipecmd->input);
+			}
+		      if(dup2(pipeIn,S_INPUT)==-1)
+			{
+			  printf("dup2 failed!");
+			}
+		    }
+		  close(pipefd[i][0]);//关闭第一个管道的管道读；
+		  if(dup2(pipes[i][1],S_OUTPUT)<0)
+		    {
+		      printf("dup2 failed!");
+		    }
+		  execPPCmd(pipecmd->temp[i]);
+		}
+	      else if(i==singlecmdnum-1)//这是最后一个进程
+		{
+		  setpgid(pid[i],Gpid);
+		  if(pipecmd->output!=NULL)
+		    {
+		      if((pipeOut=open(siglecmdnum->output, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1)
+			{
+			  printf("open failed!\n");
+			}
+		      if(dup2(pipeOut,S_OUTPUT)==-1)
+			{
+			  printf("dup2 failed!\n");
+			}
+		    }
+		  close(pipes[i-1][1]);//关掉管道写
+		  if(dup2(pipes[i-1][0],S_INPUT)<0)
+		    {
+		      printf("dup2 failed!\n");
+		    }
+		  for(j=0;j<i-1;j++)
+		    {
+		      close(pipes[j][0]);
+		      close(pipes[j][1]);
+		    }
+		  close(pipes[i][0]);
+		  close(pipes[i][1]);//其实最后一个管道本来不需要建立
+		  execPPCmd(pipecmd->temp[i]);
+		}
+	      else//中间进程
+		{
+		  setpgid(pid[i],Gpid);
+		  close(pipes[i-1][1]);//关掉前一个管道写；
+		  close(pipes[i][0]);//关掉当前管道读；
+		  if(dup2(pipes[i-1][0],S_INPUT)==-1)//输入重定向
+		    {
+		      printf("dup2 failed!\n");
+		    }
+		  if(dup2(pipes[i][1],S_OUTPUT)==-1)//输出重定向
+		    {
+		      printf("dup2 failed!\n");
+		    }
+		  for(j=0;j<i-1;i++)
+		    {
+		      close(pipes[j][0]);
+		      close(pipes[j][1]);
+		    }//关闭不用的管道。
+		  execPPCmd(pipecmd->temp[i]);
+		}
+	    }
+	  else//父进程
+	    {
+	      if(cmd->isback)
+		addJob(pid[0]);
+	      else
+		{
+		setpgid(pid[0],pid[0]);//设置成当前进程组
+		tcsetpgrp(0, pid[0]);
+		}
+	    }
+	}
+    }
+}
 void execPipeCmd(){
-
+    PipeCmd *pipecmd = handlePipeCmdStr(0, strlen(inputBuff));
+    exePipeCmd(pipecmd);
 }

@@ -970,7 +970,8 @@ void execSimpleCmd(){
                     return;
                 }
             }
-
+    signal(SIGTSTP, ctrl_Z); //设置signal信号，为下一次按下组合键Ctrl+Z做准备
+    signal(SIGINT,ctrl_C);
             if(execv(cmdBuff, cmd->args) < 0){ //执行命令
                 printf("execv failed!\n");
                 return;

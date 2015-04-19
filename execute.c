@@ -14,12 +14,13 @@
 #include <sys/ioctl.h>
 #include <sys/termios.h>
 #include "global.h"
-#define DEBUG
-
-int goon = 0;
+//#define DEBUG
 
 #define S_INPUT 0//标准输入
 #define S_OUTPUT 1//标准输出
+
+int goon = 0;
+
 int ingnore = 0;       //用于设置signal信号量
 char *envPath[10], cmdBuff[40];  //外部命令的存放路径及读取外部命令的缓冲空间
 History history;                 //历史命令
@@ -27,8 +28,8 @@ Job *head = NULL;                //作业头指针
 pid_t fgPid;                     //当前前台作业的进程号
 typedef struct PipeCmd{
   int isBack;//是否后台运行
-  char *input;//输入重定向
-  char *output;//输出重定向
+char * input;
+char *output;
   int simpleCmdNum;//管道所包含的简单命令的数目；
   SimpleCmd * temp[101];//管道所包含的简单命令按照输入顺序存放在结构中
   }PipeCmd;
@@ -238,9 +239,11 @@ void fg_exec(int pid){
     while(i >= 0 && now->cmd[i] != '&')
 		i--;
     now->cmd[i] = '\0';
-
+   
+  
     printf("%s\n", now->cmd);
     kill(now->pid, SIGCONT); //向对象作业发送SIGCONT信号，使其运行
+     sleep(1);
     waitpid(fgPid, NULL, 0); //父进程等待前台进程的运行
 }
 
@@ -257,7 +260,7 @@ void bg_exec(int pid){
 		now = now->next;
 
     if(now == NULL){ //未找到作业
-        printf("pid为7%d 的作业不存在！\n", pid);
+        printf("pid为%d 的作业不存在！\n", pid);
         return;
     }
 
@@ -656,176 +659,25 @@ SimpleCmd * handleSimpleCmd(int begin,int end){
 PipeCmd* handlePipeCmdStr(int begin, int end)
 {
     int i, j, k;
-    int fileFinished; //记录命令是否解析完毕
-    char c, buff[10][40], inputFile[30], outputFile[30], *temp = NULL;
-    PipeCmd *cmd = malloc(sizeof *cmd);
-
-	//默认为非后台命令，输入输出重定向为null，如果有管道命令 指令数默认值为1
-    cmd->isBack = 0;
-    cmd->input = cmd->output = NULL;
-	cmd->simpleCmdNum=1;
-	fileFinished=0;
-
-    //初始化相应变量
-    for(i = begin; i<10; i++)
-	{
-        buff[i][0] = '\0';
-    }
-    inputFile[0] = '\0';
-    outputFile[0] = '\0';
-	
-    i = begin;
-	//跳过空格等无用信息
-    while(i < end && (inputBuff[i] == ' ' || inputBuff[i] == '\t'))
-	{
-        i++;
-    }
-
-    k = 0;
-    j = 0;
-    fileFinished = 0;
-    temp = buff[k]; //以下通过temp指针的移动实现对buff[i]的顺次赋值过程
-    while(i < end)
-	{
-		/*根据命令字符的不同情况进行不同的处理*/
-        switch(inputBuff[i])
-		{
-            case ' ':
-           case '\t': //命令名及参数的结束标志
-                temp[j] = '\0';
-                j = 0;
-                if(!fileFinished)//没完成
-				{
-                   // k++;
-                    temp = buff[k];
-                }
-                break;
-
-            case '<': //输入重定向标志
-                if(j != 0)
-				{
-		    //此判断为防止命令直接挨着<符号导致判断为同一个参数，如果ls<sth
-                    temp[j] = '\0';
-                    j = 0;
-                    if(!fileFinished)
-					{
-                       // k++;
-                        temp = buff[k];
-                    }
-                }
-                temp = inputFile;
-              //  fileFinished = 1;
-                i++;
-                break;
-
-            case '>': //输出重定向标志
-                if(j != 0)
-				{
-                    temp[j] = '\0';
-                    j = 0;
-                    if(!fileFinished)
-					{
-                       // k++;
-                        temp = buff[k];
-                    }
-                }
-                temp = outputFile;
-                //fileFinished = 1;
-                i++;
-              break;
-			  
-            case '&': //后台运行标志
-                if(j != 0){
-                    temp[j] = '\0';
-                    j = 0;
-                    if(!fileFinished)
-					{
-                        k++;
-                        temp = buff[k];
-                    }
-                }
-                cmd->isBack = 1;
-                //fileFinished = 1;
-                i++;
-                break;
-	
-			case'|'://管道标志
-				if(j != 0){
-                    temp[j] = '\0';
-                    j = 0;
-                    if(!fileFinished)
-					{
-                        k++;
-                        temp = buff[k];
-                    }
-                }
-				cmd->simpleCmdNum++;
-				
-                //fileFinished = 1;
-				i++;
-                break;
+    int start,en;
+    PipeCmd * pcmd=(PipeCmd*)malloc(sizeof(PipeCmd));
+    start=0;
+    en=0;
+    k=0;
 
 
-            default: //默认则读入到temp指定的空间
-                temp[j++] = inputBuff[i++];
-                continue;
-		}
+    for(;inputBuff[en]!='|';en++)
+        ;
+    pcmd->temp[k++]=handleSimpleCmd(start,en);
+    start=en+1;
+    en=en+1;
 
-		//跳过空格等无用信息
-        while(i < end && (inputBuff[i] == ' ' || inputBuff[i] == '\t'))
-		{
-            i++;
-        }
-	}
-	fileFinished=1;
-
-	
-    if(inputBuff[end-1] != ' ' && inputBuff[end-1] != '\t' && inputBuff[end-1] != '&')
-	{
-        temp[j] = '\0';
-        if(!fileFinished)
-		{
-            k++;
-        }
-    }
-
-	//如果有输入重定向文件，则为命令的输入重定向变量赋值
-    if(strlen(inputFile) != 0)
-	{
-        j = strlen(inputFile);
-        cmd->input = (char*)malloc(sizeof(char) * (j + 1));
-        strcpy(cmd->input, inputFile);
-    }
-	
-
-    //如果有输出重定向文件，则为命令的输出重定向变量赋值
-    if(strlen(outputFile) != 0){
-        j = strlen(outputFile);
-        cmd->output = (char*)malloc(sizeof(char) * (j + 1));
-        strcpy(cmd->output, outputFile);
-    }
-	
-	
-	for(k=0;k<cmd->simpleCmdNum;k++)
-	{
-		cmd->temp[k]= handleSimpleCmd(0, strlen(buff[k]));
-		if(k>0&&k<cmd->simpleCmdNum)
-			cmd->temp[k]->input=cmd->temp[k-1]->output;
-	}
+    pcmd->temp[k++]=handleSimpleCmd(start,end);
+    start=en+1;
+    en=en+1;
 
 
-    #ifdef DEBUG
-    printf("****\n");
-    printf("isBack: %d\n",cmd->isBack);
-    	for(i = 0; cmd->temp[i] != NULL; i++)
-		{
-    		printf("cmds[%d]: %s\n",i,cmd->temp[i]->args[0]);
-		}
-    printf("input: %s\n",cmd->input);
-    printf("output: %s\n",cmd->output);
-    printf("****\n");
-    #endif
-    return cmd;
+    return pcmd;
 }
 /*******************************************************
                      命令执行接口
@@ -886,7 +738,7 @@ void execCd(){
     else if(chdir(temp) < 0){
         printf("cd; %s 错误的文件名或文件夹名！\n", temp);
     }
-    printf("%s|\n",temp);
+    //printf("%s|\n",temp);
 }
 
 void execFgCmd(){
@@ -1204,6 +1056,38 @@ void exePiPCmd(PipeCmd *pipecmd){
 }
 
 void execPipeCmd(){
-    PipeCmd *pipecmd = handlePipeCmdStr(0, strlen(inputBuff));
-    exePiPCmd(pipecmd);
+  PipeCmd *pipecmd = handlePipeCmdStr(0, strlen(inputBuff));
+ //   exePiPCmd(pipecmd);
+  int status;
+    int pipe_fd[2];
+    int pid[2];
+    pipe(pipe_fd);
+    if((pid[0]=fork())<0){
+        perror("Fork fail");
+        exit(errno);
+    }
+    if(!pid[0]){
+        close(pipe_fd[0]);
+        dup2(pipe_fd[1],1);
+        close(pipe_fd[1]);
+        execvp(pipecmd->temp[0]->args[0],pipecmd->temp[0]->args);
+    }
+    if(pid[0]){
+        if((pid[1]=fork())<0){
+            perror("Fork fail");
+            exit(errno);
+        }
+        if(!pid[1]){
+            close(pipe_fd[1]);
+            dup2(pipe_fd[0],0);
+            close(pipe_fd[0]);
+            execvp(pipecmd->temp[1]->args[0],pipecmd->temp[1]->args);
+        }
+        close(pipe_fd[0]);
+        close(pipe_fd[1]);
+        fgPid=pid[0];
+         sleep(1);
+        waitpid(pid[1],&status,0);
+       
+    }
 }

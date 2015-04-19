@@ -2,7 +2,7 @@
     #define _GNU_SOURCE
     #include <unistd.h>
     #include "global.h"
-
+    int last=0;
     int yylex ();
     void yyerror ();
     void execCd();
@@ -18,16 +18,16 @@
 cmd_list: /* empty */
 | cmd_list cmd
 ;
-cmd: CDCMD  {execCd();}
-| EXIT  {execExit();}
-| HISTORY  {execHistory();}
-| JOBS {execJobs();}
-| FGCMD  {execFgCmd();}
-| BGCMD  {execBgCmd();}
-| PIPECMD  {execPipeCmd();}
-| CMD   {execSimpleCmd();}
-| INRE   {execSimpleCmd();}
-| OUTRE {execSimpleCmd();}
+cmd: CDCMD  {last=0;execCd();}
+| EXIT  {last=0;execExit();}
+| HISTORY  {last=0;execHistory();}
+| JOBS {last=0;execJobs();}
+| FGCMD  {last=0;execFgCmd();}
+| BGCMD  {last=0;execBgCmd();}
+| PIPECMD  {last=1;execPipeCmd();}
+| CMD   {last=0;execSimpleCmd();}
+| INRE   {last=0;execSimpleCmd();}
+| OUTRE {last=0;execSimpleCmd();}
 | EOL
 ;
 
@@ -68,8 +68,11 @@ int main(int argc, char** argv) {
 
     init(); //初始化环境
     while(1){
+
         yyparse();
-        printf("finish a back ground command!\n");
+        //printf("finish a back ground command!\n");
+
+        
     }
     return (EXIT_SUCCESS);
 }
